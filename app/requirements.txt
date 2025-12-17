@@ -1,10 +1,9 @@
 fastapi
 uvicorn
 pillow
-paddlepaddle==2.5.2
-paddleocr==2.7.0.3
+numpy
+opencv-python-headless
 torch
 transformers
 pix2tex
 PyMuPDF
-numpy
