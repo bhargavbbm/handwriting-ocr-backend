@@ -1,86 +1,99 @@
 import io
 import numpy as np
 from PIL import Image
-from paddleocr import PaddleOCR
+import cv2
+
 from transformers import TrOCRProcessor, VisionEncoderDecoderModel
 from pix2tex.cli import LatexOCR
 from app.pdf_utils import pdf_to_images
 
-# Initialize OCR models once at startup
-
-# PaddleOCR for line detection
-paddle = PaddleOCR(use_angle_cls=True, lang='en')
-
-# TrOCR for handwritten text recognition
+# Load models
 processor = TrOCRProcessor.from_pretrained("microsoft/trocr-base-handwritten")
 trocr_model = VisionEncoderDecoderModel.from_pretrained("microsoft/trocr-base-handwritten")
 
-# pix2tex for equation-to-LaTeX
 pix_model = LatexOCR()
 
 
 def is_math(text):
-    """Simple classifier for math lines."""
     math_chars = "=+-/*^(){}[]><√∫ΣπωΩ"
     return any(c in text for c in math_chars)
 
 
 def recognize_text_line(image_np):
-    """Use TrOCR to read handwritten text."""
-    pil_img = Image.fromarray(image_np)
-    pixel_values = processor(images=pil_img, return_tensors="pt").pixel_values
-    ids = trocr_model.generate(pixel_values)
+    img = Image.fromarray(image_np)
+    pixel = processor(images=img, return_tensors="pt").pixel_values
+    ids = trocr_model.generate(pixel)
     return processor.batch_decode(ids, skip_special_tokens=True)[0]
 
 
 def recognize_equation(image_np):
-    """Convert handwritten equations to LaTeX."""
-    pil_img = Image.fromarray(image_np)
-    return pix_model(pil_img)
+    img = Image.fromarray(image_np)
+    return pix_model(img)
 
 
-def process_image_np(img):
-    """Full OCR pipeline for a single image."""
-    results = paddle.ocr(img, cls=True)
-    if not results or not results[0]:
-        return []
+def segment_lines(img_np):
+    """Detect horizontal handwritten lines using OpenCV."""
+    gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+    blur = cv2.GaussianBlur(gray, (5, 5), 0)
+    thresh = cv2.adaptiveThreshold(
+        blur, 255,
+        cv2.ADAPTIVE_THRESH_MEAN_C,
+        cv2.THRESH_BINARY_INV,
+        25, 15
+    )
 
+    # Dilate horizontally to form line blocks
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 18))
+    dilated = cv2.dilate(thresh, kernel, iterations=2)
+
+    contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    lines = []
+
+    for cnt in contours:
+        x, y, w, h = cv2.boundingRect(cnt)
+
+        if h < 20 or w < 50:
+            continue
+
+        crop = img_np[y:y+h, x:x+w]
+        lines.append(crop)
+
+    # Sort lines from top to bottom
+    lines = sorted(lines, key=lambda c: cv2.boundingRect(cv2.cvtColor(c, cv2.COLOR_RGB2GRAY))[1])
+
+    return lines
+
+
+def process_image_np(img_np):
+    lines = segment_lines(img_np)
     blocks = []
 
-    for box, (text, conf) in results[0]:
-        # Coordinates from PaddleOCR
-        x1 = int(min(box[0][0], box[3][0]))
-        y1 = int(min(box[0][1], box[1][1]))
-        x2 = int(max(box[1][0], box[2][0]))
-        y2 = int(max(box[2][1], box[3][1]))
+    for line in lines:
+        # Quick check if likely mathematical: many symbols detected
+        text_preview = recognize_text_line(line)
 
-        crop = img[y1:y2, x1:x2]
-
-        if is_math(text):
-            latex = recognize_equation(crop)
+        if is_math(text_preview):
+            latex = recognize_equation(line)
             blocks.append({"type": "equation", "content": latex})
         else:
-            clean_text = recognize_text_line(crop)
-            blocks.append({"type": "text", "content": clean_text})
+            blocks.append({"type": "text", "content": text_preview})
 
     return blocks
 
 
 def process_pdf_file(pdf_bytes):
-    """Process a full PDF file."""
     pages = pdf_to_images(pdf_bytes)
     all_blocks = []
 
-    for img_pil in pages:
-        img_np = np.array(img_pil)
-        blocks = process_image_np(img_np)
-        all_blocks.extend(blocks)
+    for img in pages:
+        img_np = np.array(img)
+        all_blocks.extend(process_image_np(img_np))
 
     return all_blocks
 
 
 def process_image_file(image_bytes):
-    """Process a single image file."""
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     img_np = np.array(img)
     return process_image_np(img_np)
