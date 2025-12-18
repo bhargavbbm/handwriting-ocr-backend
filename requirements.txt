@@ -1,4 +1,7 @@
 fastapi
 uvicorn
-requests
+mfr
+mfr-doc
+mfr-pdf
+mfr-image
 python-multipart
