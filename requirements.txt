@@ -1,7 +1,9 @@
 fastapi
 uvicorn
-mfr
-mfr-doc
-mfr-pdf
-mfr-image
 python-multipart
+Pillow
+torch
+torchvision
+transformers
+pix2tex
+einops
