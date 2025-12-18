@@ -1,9 +1,0 @@
-fastapi
-uvicorn
-pillow
-numpy
-opencv-python-headless
-torch
-transformers
-pix2tex
-PyMuPDF
