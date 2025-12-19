@@ -1,9 +1,4 @@
 fastapi
-uvicorn
+uvicorn[standard]
 python-multipart
-Pillow
-torch
-torchvision
-transformers
-pix2tex
-einops
+replicate
