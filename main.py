@@ -1,10 +1,12 @@
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-import replicate
-import base64
+from latexocr import LatexOCR
+from PIL import Image
+import io
 
 app = FastAPI()
 
+# enable frontend → backend calls
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -12,18 +14,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-MODEL_ID = "lambdalabs/pix2tex:4d559486cc0d69dc8b51236aa0f5bd8b7cbdeb18e718a22a42d9fa3bdca4ff2b"
+model = LatexOCR()
 
 @app.post("/ocr")
 async def ocr(file: UploadFile = File(...)):
-    image_bytes = await file.read()
-    img_base64 = base64.b64encode(image_bytes).decode()
+    img_bytes = await file.read()
+    img = Image.open(io.BytesIO(img_bytes))
 
     try:
-        output = replicate.run(
-            MODEL_ID,
-            input={"image": f"data:image/png;base64,{img_base64}"}
-        )
-        return {"latex": output}
+        latex = model(img)
+        return {"latex": latex}
     except Exception as e:
         return {"error": str(e)}
