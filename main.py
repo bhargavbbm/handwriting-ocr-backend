@@ -5,7 +5,6 @@ import base64
 
 app = FastAPI()
 
-# Allow frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -13,7 +12,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-MODEL_ID = "lherman-cs/pix2tex:3a9817a9564f962d08d6579b0ce3f4bfefd4dc2621e073db1d3cb21915de7c2c"
+MODEL_ID = "lambdalabs/pix2tex:4d559486cc0d69dc8b51236aa0f5bd8b7cbdeb18e718a22a42d9fa3bdca4ff2b"
 
 @app.post("/ocr")
 async def ocr(file: UploadFile = File(...)):
