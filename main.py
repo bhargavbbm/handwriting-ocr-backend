@@ -1,12 +1,11 @@
-import os
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+import replicate
 import base64
-from mfr import latex_ocr
 
 app = FastAPI()
 
-# Allow frontend (Netlify) to use backend (Render)
+# Allow frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -14,10 +13,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-model = latex_ocr.LatexOCR()   # load model once (fast!)
-
 @app.post("/ocr")
 async def ocr(file: UploadFile = File(...)):
-    img_bytes = await file.read()
-    latex = model(img_bytes)   # run model
-    return {"latex": latex}
+    image_bytes = await file.read()
+    img_base64 = base64.b64encode(image_bytes).decode()
+
+    try:
+        output = replicate.run(
+            "luca-martial/pix2tex:latest",
+            input={"image": f"data:image/png;base64,{img_base64}"}
+        )
+        return {"latex": output}
+    except Exception as e:
+        return {"error": str(e)}
